@@ -22,7 +22,10 @@ Imports:
     rstan (>= 2.14.0),
     scales,
     stats,
-    tidyr (>= 0.6.1)
+    tidyr (>= 0.6.1),
+    greta (>= 0.2.2)
+Remotes:
+    goldingn/greta@dev
 Suggests:
     knitr,
     testthat,

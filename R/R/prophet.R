@@ -16,50 +16,52 @@ globalVariables(c(
 #' Prophet forecaster.
 #'
 #' @param df (optional) Dataframe containing the history. Must have columns ds
-#'  (date type) and y, the time series. If growth is logistic, then df must
-#'  also have a column cap that specifies the capacity at each ds. If not
-#'  provided, then the model object will be instantiated but not fit; use
-#'  fit.prophet(m, df) to fit the model.
+#'   (date type) and y, the time series. If growth is logistic, then df must
+#'   also have a column cap that specifies the capacity at each ds. If not
+#'   provided, then the model object will be instantiated but not fit; use
+#'   fit.prophet(m, df) to fit the model.
 #' @param growth String 'linear' or 'logistic' to specify a linear or logistic
-#'  trend.
+#'   trend.
 #' @param changepoints Vector of dates at which to include potential
-#'  changepoints. If not specified, potential changepoints are selected
-#'  automatically.
+#'   changepoints. If not specified, potential changepoints are selected
+#'   automatically.
 #' @param n.changepoints Number of potential changepoints to include. Not used
-#'  if input `changepoints` is supplied. If `changepoints` is not supplied,
-#'  then n.changepoints potential changepoints are selected uniformly from the
-#'  first 80 percent of df$ds.
-#' @param yearly.seasonality Fit yearly seasonality. Can be 'auto', TRUE,
-#'  FALSE, or a number of Fourier terms to generate.
-#' @param weekly.seasonality Fit weekly seasonality. Can be 'auto', TRUE,
-#'  FALSE, or a number of Fourier terms to generate.
-#' @param daily.seasonality Fit daily seasonality. Can be 'auto', TRUE,
-#' FALSE, or a number of Fourier terms to generate.
+#'   if input `changepoints` is supplied. If `changepoints` is not supplied,
+#'   then n.changepoints potential changepoints are selected uniformly from the
+#'   first 80 percent of df$ds.
+#' @param yearly.seasonality Fit yearly seasonality. Can be 'auto', TRUE, FALSE,
+#'   or a number of Fourier terms to generate.
+#' @param weekly.seasonality Fit weekly seasonality. Can be 'auto', TRUE, FALSE,
+#'   or a number of Fourier terms to generate.
+#' @param daily.seasonality Fit daily seasonality. Can be 'auto', TRUE, FALSE,
+#'   or a number of Fourier terms to generate.
 #' @param holidays data frame with columns holiday (character) and ds (date
-#'  type)and optionally columns lower_window and upper_window which specify a
-#'  range of days around the date to be included as holidays. lower_window=-2
-#'  will include 2 days prior to the date as holidays. Also optionally can have
-#'  a column prior_scale specifying the prior scale for each holiday.
+#'   type)and optionally columns lower_window and upper_window which specify a
+#'   range of days around the date to be included as holidays. lower_window=-2
+#'   will include 2 days prior to the date as holidays. Also optionally can have
+#'   a column prior_scale specifying the prior scale for each holiday.
 #' @param seasonality.prior.scale Parameter modulating the strength of the
-#'  seasonality model. Larger values allow the model to fit larger seasonal
-#'  fluctuations, smaller values dampen the seasonality. Can be specified for
-#'  individual seasonalities using add_seasonality.
+#'   seasonality model. Larger values allow the model to fit larger seasonal
+#'   fluctuations, smaller values dampen the seasonality. Can be specified for
+#'   individual seasonalities using add_seasonality.
 #' @param holidays.prior.scale Parameter modulating the strength of the holiday
-#'  components model, unless overridden in the holidays input.
+#'   components model, unless overridden in the holidays input.
 #' @param changepoint.prior.scale Parameter modulating the flexibility of the
-#'  automatic changepoint selection. Large values will allow many changepoints,
-#'  small values will allow few changepoints.
+#'   automatic changepoint selection. Large values will allow many changepoints,
+#'   small values will allow few changepoints.
 #' @param mcmc.samples Integer, if greater than 0, will do full Bayesian
-#'  inference with the specified number of MCMC samples. If 0, will do MAP
-#'  estimation.
+#'   inference with the specified number of MCMC samples. If 0, will do MAP
+#'   estimation.
 #' @param interval.width Numeric, width of the uncertainty intervals provided
-#'  for the forecast. If mcmc.samples=0, this will be only the uncertainty
-#'  in the trend using the MAP estimate of the extrapolated generative model.
-#'  If mcmc.samples>0, this will be integrated over all model parameters,
-#'  which will include uncertainty in seasonality.
+#'   for the forecast. If mcmc.samples=0, this will be only the uncertainty in
+#'   the trend using the MAP estimate of the extrapolated generative model. If
+#'   mcmc.samples>0, this will be integrated over all model parameters, which
+#'   will include uncertainty in seasonality.
 #' @param uncertainty.samples Number of simulated draws used to estimate
-#'  uncertainty intervals.
+#'   uncertainty intervals.
 #' @param fit Boolean, if FALSE the model is initialized but not fit.
+#' @param engine Which computational backend to use to fit the model. Can be
+#'   either 'stan' or 'greta'.
 #' @param ... Additional arguments, passed to \code{\link{fit.prophet}}
 #'
 #' @return A prophet model.
@@ -89,14 +91,15 @@ prophet <- function(df = NULL,
                     interval.width = 0.80,
                     uncertainty.samples = 1000,
                     fit = TRUE,
+                    engine = c("stan", "greta"),
                     ...
 ) {
   # fb-block 1
-
+  
   if (!is.null(changepoints)) {
     n.changepoints <- length(changepoints)
   }
-
+  
   m <- list(
     growth = growth,
     changepoints = changepoints,
@@ -122,14 +125,15 @@ prophet <- function(df = NULL,
     stan.fit = NULL,
     params = list(),
     history = NULL,
-    history.dates = NULL
+    history.dates = NULL,
+    engine = match.arg(engine)
   )
   validate_inputs(m)
   class(m) <- append("prophet", class(m))
   if ((fit) && (!is.null(df))) {
     m <- fit.prophet(m, df, ...)
   }
-
+  
   # fb-block 2
   return(m)
 }
@@ -193,7 +197,7 @@ validate_column_name <- function(
   rn_l = paste(reserved_names,"_lower",sep="")
   rn_u = paste(reserved_names,"_upper",sep="")
   reserved_names = c(reserved_names, rn_l, rn_u,
-    c("ds", "y", "cap", "floor", "y_scaled", "cap_scaled"))
+                     c("ds", "y", "cap", "floor", "y_scaled", "cap_scaled"))
   if(name %in% reserved_names){
     stop("Name ", name, " is reserved.")
   }
@@ -228,7 +232,7 @@ get_prophet_stan_model <- function(model) {
     load(binary)
     obj.name <- paste(model, 'growth.stanm', sep = '.')
     stanm <- eval(parse(text = obj.name))
-
+    
     ## Should cause an error if the model doesn't work.
     stanm@mk_cppmodule(stanm)
     stanm
@@ -247,10 +251,10 @@ get_prophet_stan_model <- function(model) {
 #' @keywords internal
 compile_stan_model <- function(model) {
   fn <- paste('stan/prophet', model, 'growth.stan', sep = '_')
-
+  
   stan.src <- system.file(fn, package = 'prophet', mustWork = TRUE)
   stanc <- rstan::stanc(stan.src)
-
+  
   model.name <- paste(model, 'growth', sep = '_')
   return(rstan::stan_model(stanc_ret = stanc, model_name = model.name))
 }
@@ -269,11 +273,11 @@ set_date <- function(ds = NULL, tz = "GMT") {
   if (length(ds) == 0) {
     return(NULL)
   }
-
+  
   if (is.factor(ds)) {
     ds <- as.character(ds)
   }
-
+  
   if (min(nchar(ds)) < 12) {
     ds <- as.POSIXct(ds, format = "%Y-%m-%d", tz = tz)
   } else {
@@ -329,12 +333,12 @@ setup_dataframe <- function(m, df, initialize_scales = FALSE) {
       stop('Regressor "', name, '" missing from dataframe')
     }
   }
-
+  
   df <- df %>%
     dplyr::arrange(ds)
-
+  
   m <- initialize_scales_fn(m, initialize_scales, df)
-
+  
   if (m$logistic.floor) {
     if (!('floor' %in% colnames(df))) {
       stop("Expected column 'floor'.")
@@ -342,7 +346,7 @@ setup_dataframe <- function(m, df, initialize_scales = FALSE) {
   } else {
     df$floor <- 0
   }
-
+  
   if (m$growth == 'logistic') {
     if (!(exists('cap', where=df))) {
       stop('Capacities must be supplied for logistic growth.')
@@ -350,12 +354,12 @@ setup_dataframe <- function(m, df, initialize_scales = FALSE) {
     df <- df %>%
       dplyr::mutate(cap_scaled = (cap - floor) / m$y.scale)
   }
-
+  
   df$t <- time_diff(df$ds, m$start, "secs") / m$t.scale
   if (exists('y', where=df)) {
     df$y_scaled <- (df$y - df$floor) / m$y.scale
   }
-
+  
   for (name in names(m$extra_regressors)) {
     df[[name]] <- as.numeric(df[[name]])
     props <- m$extra_regressors[[name]]
@@ -549,13 +553,13 @@ make_holiday_features <- function(m, dates) {
     }) %>%
     dplyr::mutate(x = 1.) %>%
     tidyr::spread(holiday, x, fill = 0)
-
+  
   holiday.features <- data.frame(ds = set_date(dates)) %>%
     dplyr::left_join(wide, by = 'ds') %>%
     dplyr::select(-ds)
-
+  
   holiday.features[is.na(holiday.features)] <- 0
-
+  
   # Prior scales
   if (!('prior_scale' %in% colnames(m$holidays))) {
     m$holidays$prior_scale <- m$holidays.prior.scale
@@ -576,7 +580,7 @@ make_holiday_features <- function(m, dates) {
     }
     prior.scales.list[[name]] <- ps
   }
-
+  
   prior.scales <- c()
   for (name in colnames(holiday.features)) {
     sn <- strsplit(name, '_delim_', fixed = TRUE)[[1]][1]
@@ -687,7 +691,7 @@ add_seasonality <- function(m, name, period, fourier.order, prior.scale = NULL) 
 make_all_seasonality_features <- function(m, df) {
   seasonal.features <- data.frame(row.names = 1:nrow(df))
   prior.scales <- c()
-
+  
   # Seasonality features
   for (name in names(m$seasonalities)) {
     props <- m$seasonalities[[name]]
@@ -697,20 +701,20 @@ make_all_seasonality_features <- function(m, df) {
     prior.scales <- c(prior.scales,
                       props$prior.scale * rep(1, ncol(features)))
   }
-
+  
   # Holiday features
   if (!is.null(m$holidays)) {
     hf <- make_holiday_features(m, df$ds)
     seasonal.features <- cbind(seasonal.features, hf$holiday.features)
     prior.scales <- c(prior.scales, hf$prior.scales)
   }
-
+  
   # Additional regressors
   for (name in names(m$extra_regressors)) {
     seasonal.features[[name]] <- df[[name]]
     prior.scales <- c(prior.scales, m$extra_regressors[[name]]$prior.scale)
   }
-
+  
   if (ncol(seasonal.features) == 0) {
     seasonal.features <- data.frame(zeros = rep(0, nrow(df)))
     prior.scales <- c(1.)
@@ -771,7 +775,7 @@ set_auto_seasonalities <- function(m) {
   last <- max(m$history$ds)
   dt <- diff(time_diff(m$history$ds, m$start))
   min.dt <- min(dt[dt > 0])
-
+  
   yearly.disable <- time_diff(last, first) < 730
   fourier.order <- parse_seasonality_args(
     m, 'yearly', m$yearly.seasonality, yearly.disable, 10)
@@ -782,7 +786,7 @@ set_auto_seasonalities <- function(m) {
       prior.scale = m$seasonality.prior.scale
     )
   }
-
+  
   weekly.disable <- ((time_diff(last, first) < 14) || (min.dt >= 7))
   fourier.order <- parse_seasonality_args(
     m, 'weekly', m$weekly.seasonality, weekly.disable, 3)
@@ -793,7 +797,7 @@ set_auto_seasonalities <- function(m) {
       prior.scale = m$seasonality.prior.scale
     )
   }
-
+  
   daily.disable <- ((time_diff(last, first) < 2) || (min.dt >= 1))
   fourier.order <- parse_seasonality_args(
     m, 'daily', m$daily.seasonality, daily.disable, 4)
@@ -848,16 +852,16 @@ logistic_growth_init <- function(df) {
   i0 <- which.min(df$ds)
   i1 <- which.max(df$ds)
   T <- df$t[i1] - df$t[i0]
-
+  
   # Force valid values, in case y > cap or y < 0
   C0 <- df$cap_scaled[i0]
   C1 <- df$cap_scaled[i1]
   y0 <- max(0.01 * C0, min(0.99 * C0, df$y_scaled[i0]))
   y1 <- max(0.01 * C1, min(0.99 * C1, df$y_scaled[i1]))
-
+  
   r0 <- C0 / y0
   r1 <- C1 / y1
-
+  
   if (abs(r0 - r1) <= 0.01) {
     r0 <- 1.05 * r0
   }
@@ -897,7 +901,7 @@ fit.prophet <- function(m, df, ...) {
     stop("Dataframe has less than 2 non-NA rows.")
   }
   m$history.dates <- sort(set_date(df$ds))
-
+  
   out <- setup_dataframe(m, history, initialize_scales = TRUE)
   history <- out$df
   m <- out$m
@@ -906,10 +910,10 @@ fit.prophet <- function(m, df, ...) {
   out2 <- make_all_seasonality_features(m, history)
   seasonal.features <- out2$seasonal.features
   prior.scales <- out2$prior.scales
-
+  
   m <- set_changepoints(m)
   A <- get_changepoint_matrix(m)
-
+  
   # Construct input to stan
   dat <- list(
     T = nrow(history),
@@ -923,7 +927,7 @@ fit.prophet <- function(m, df, ...) {
     sigmas = array(prior.scales),
     tau = m$changepoint.prior.scale
   )
-
+  
   # Run stan
   if (m$growth == 'linear') {
     kinit <- linear_growth_init(history)
@@ -931,13 +935,13 @@ fit.prophet <- function(m, df, ...) {
     dat$cap <- history$cap_scaled  # Add capacities to the Stan data
     kinit <- logistic_growth_init(history)
   }
-
+  
   if (exists(".prophet.stan.models")) {
     model <- .prophet.stan.models[[m$growth]]
   } else {
     model <- get_prophet_stan_model(m$growth)
   }
-
+  
   stan_init <- function() {
     list(k = kinit[1],
          m = kinit[2],
@@ -946,7 +950,7 @@ fit.prophet <- function(m, df, ...) {
          sigma_obs = 1
     )
   }
-
+  
   if (min(history$y) == max(history$y)) {
     # Nothing to fit.
     m$params <- stan_init()
@@ -963,18 +967,29 @@ fit.prophet <- function(m, df, ...) {
     m$params <- rstan::extract(stan.fit)
     n.iteration <- length(m$params$k)
   } else {
-    stan.fit <- rstan::optimizing(
-      model,
-      data = dat,
-      init = stan_init,
-      iter = 1e4,
-      as_vector = FALSE,
-      ...
-    )
-    m$params <- stan.fit$par
+
+    if (m$engine == 'stan') {
+      fit <- rstan::optimizing(
+        model,
+        data = dat,
+        init = stan_init,
+        iter = 1e4,
+        as_vector = FALSE,
+        ...
+      )
+    } else {
+      fit <- greta_fit(
+        type = m$growth,
+        data = dat,
+        init = stan_init,
+        iter = 1e4,
+        ...
+      )
+    }
+    m$params <- fit$par
     n.iteration <- 1
   }
-
+  
   # Cast the parameters to have consistent form, whether full bayes or MAP
   for (name in c('delta', 'beta')){
     m$params[[name]] <- matrix(m$params[[name]], nrow = n.iteration)
@@ -1023,11 +1038,11 @@ predict.prophet <- function(object, df = NULL, ...) {
     out <- setup_dataframe(object, df)
     df <- out$df
   }
-
+  
   df$trend <- predict_trend(object, df)
   seasonal.components <- predict_seasonal_components(object, df)
   intervals <- predict_uncertainty(object, df)
-
+  
   # Drop columns except ds, cap, floor, and trend
   cols <- c('ds', 'trend')
   if ('cap' %in% colnames(df)) {
@@ -1114,7 +1129,7 @@ predict_trend <- function(model, df) {
   k <- mean(model$params$k, na.rm = TRUE)
   param.m <- mean(model$params$m, na.rm = TRUE)
   deltas <- colMeans(model$params$delta, na.rm = TRUE)
-
+  
   t <- df$t
   if (model$growth == 'linear') {
     trend <- piecewise_linear(t, deltas, k, param.m, model$changepoints.t)
@@ -1138,7 +1153,7 @@ predict_seasonal_components <- function(m, df) {
   seasonal.features <- make_all_seasonality_features(m, df)$seasonal.features
   lower.p <- (1 - m$interval.width)/2
   upper.p <- (1 + m$interval.width)/2
-
+  
   components <- dplyr::data_frame(component = colnames(seasonal.features)) %>%
     dplyr::mutate(col = 1:n()) %>%
     tidyr::separate(component, c('component', 'part'), sep = "_delim_",
@@ -1159,7 +1174,7 @@ predict_seasonal_components <- function(m, df) {
     components, 'extra_regressors', names(m$extra_regressors))
   # Remove the placeholder
   components <- dplyr::filter(components, component != 'zeros')
-
+  
   component.predictions <- components %>%
     dplyr::group_by(component) %>% dplyr::do({
       comp <- (as.matrix(seasonal.features[, .$col])
@@ -1176,7 +1191,7 @@ predict_seasonal_components <- function(m, df) {
     tidyr::unite(component, component, stat, sep="") %>%
     tidyr::spread(component, value) %>%
     dplyr::select(-ix)
-
+  
   return(component.predictions)
 }
 
@@ -1212,12 +1227,12 @@ sample_posterior_predictive <- function(m, df) {
   n.iterations <- length(m$params$k)
   samp.per.iter <- max(1, ceiling(m$uncertainty.samples / n.iterations))
   nsamp <- n.iterations * samp.per.iter  # The actual number of samples
-
+  
   seasonal.features <- make_all_seasonality_features(m, df)$seasonal.features
   sim.values <- list("trend" = matrix(, nrow = nrow(df), ncol = nsamp),
                      "seasonal" = matrix(, nrow = nrow(df), ncol = nsamp),
                      "yhat" = matrix(, nrow = nrow(df), ncol = nsamp))
-
+  
   for (i in 1:n.iterations) {
     # For each set of parameters from MCMC (or just 1 set for MAP),
     for (j in 1:samp.per.iter) {
@@ -1262,14 +1277,14 @@ predict_uncertainty <- function(m, df) {
   # Add uncertainty estimates
   lower.p <- (1 - m$interval.width)/2
   upper.p <- (1 + m$interval.width)/2
-
+  
   intervals <- cbind(
     t(apply(t(sim.values$yhat), 2, stats::quantile, c(lower.p, upper.p),
             na.rm = TRUE)),
     t(apply(t(sim.values$trend), 2, stats::quantile, c(lower.p, upper.p),
             na.rm = TRUE))
   ) %>% dplyr::as_data_frame()
-
+  
   colnames(intervals) <- paste(rep(c('yhat', 'trend'), each=2),
                                c('lower', 'upper'), sep = "_")
   return(intervals)
@@ -1287,13 +1302,13 @@ predict_uncertainty <- function(m, df) {
 #' @keywords internal
 sample_model <- function(m, df, seasonal.features, iteration) {
   trend <- sample_predictive_trend(m, df, iteration)
-
+  
   beta <- m$params$beta[iteration,]
   seasonal <- (as.matrix(seasonal.features) %*% beta) * m$y.scale
-
+  
   sigma <- m$params$sigma_obs[iteration]
   noise <- stats::rnorm(nrow(df), mean = 0, sd = sigma) * m$y.scale
-
+  
   return(list("yhat" = trend + seasonal + noise,
               "trend" = trend,
               "seasonal" = seasonal))
@@ -1312,10 +1327,10 @@ sample_predictive_trend <- function(model, df, iteration) {
   k <- model$params$k[iteration]
   param.m <- model$params$m[iteration]
   deltas <- model$params$delta[iteration,]
-
+  
   t <- df$t
   T <- max(t)
-
+  
   if (T > 1) {
     # Get the time discretization of the history
     dt <- diff(model$history$t)
@@ -1330,7 +1345,7 @@ sample_predictive_trend <- function(model, df, iteration) {
     prob.change <- min(1, (S * (T - 1)) / N)
     # This calculation works for both history and df not uniformly spaced.
     n.changes <- stats::rbinom(1, N, prob.change)
-
+    
     # Sample ts
     if (n.changes == 0) {
       changepoint.ts.new <- c()
@@ -1341,16 +1356,16 @@ sample_predictive_trend <- function(model, df, iteration) {
     changepoint.ts.new <- c()
     n.changes <- 0
   }
-
+  
   # Get the empirical scale of the deltas, plus epsilon to avoid NaNs.
   lambda <- mean(abs(c(deltas))) + 1e-8
   # Sample deltas
   deltas.new <- extraDistr::rlaplace(n.changes, mu = 0, sigma = lambda)
-
+  
   # Combine with changepoints from the history
   changepoint.ts <- c(model$changepoints.t, changepoint.ts.new)
   deltas <- c(deltas, deltas.new)
-
+  
   # Get the corresponding trend
   if (model$growth == 'linear') {
     trend <- piecewise_linear(t, deltas, k, param.m, changepoint.ts)
@@ -1511,7 +1526,7 @@ prophet_plot_components <- function(
     panels[[length(panels) + 1]] <- plot_forecast_component(
       fcst, 'extra_regressors', uncertainty, FALSE)
   }
-
+  
   # Make the plot.
   grid::grid.newpage()
   grid::pushViewport(grid::viewport(layout = grid::grid.layout(length(panels),
@@ -1538,7 +1553,7 @@ plot_forecast_component <- function(
   fcst, name, uncertainty = TRUE, plot_cap = FALSE
 ) {
   gg.comp <- ggplot2::ggplot(
-      fcst, ggplot2::aes_string(x = 'ds', y = name, group = 1)) +
+    fcst, ggplot2::aes_string(x = 'ds', y = name, group = 1)) +
     ggplot2::geom_line(color = "#0072B2", na.rm = TRUE)
   if (exists('cap', where = fcst) && plot_cap) {
     gg.comp <- gg.comp + ggplot2::geom_line(
@@ -1597,7 +1612,7 @@ plot_weekly <- function(m, uncertainty = TRUE, weekly_start = 0) {
   df.w <- seasonality_plot_df(m, days)
   seas <- predict_seasonal_components(m, df.w)
   seas$dow <- factor(weekdays(df.w$ds), levels=weekdays(df.w$ds))
-
+  
   gg.weekly <- ggplot2::ggplot(seas, ggplot2::aes(x = dow, y = weekly,
                                                   group = 1)) +
     ggplot2::geom_line(color = "#0072B2", na.rm = TRUE) +
@@ -1631,7 +1646,7 @@ plot_yearly <- function(m, uncertainty = TRUE, yearly_start = 0) {
   df.y <- seasonality_plot_df(m, days)
   seas <- predict_seasonal_components(m, df.y)
   seas$ds <- df.y$ds
-
+  
   gg.yearly <- ggplot2::ggplot(seas, ggplot2::aes(x = ds, y = yearly,
                                                   group = 1)) +
     ggplot2::geom_line(color = "#0072B2", na.rm = TRUE) +
@@ -1668,7 +1683,7 @@ plot_seasonality <- function(m, name, uncertainty = TRUE) {
   seas <- predict_seasonal_components(m, df.y)
   seas$ds <- df.y$ds
   gg.s <- ggplot2::ggplot(
-      seas, ggplot2::aes_string(x = 'ds', y = name, group = 1)) +
+    seas, ggplot2::aes_string(x = 'ds', y = name, group = 1)) +
     ggplot2::geom_line(color = "#0072B2", na.rm = TRUE)
   if (period <= 2) {
     fmt.str <- '%T'
@@ -1681,13 +1696,13 @@ plot_seasonality <- function(m, name, uncertainty = TRUE) {
     ggplot2::scale_x_datetime(labels = scales::date_format(fmt.str))
   if (uncertainty) {
     gg.s <- gg.s +
-    ggplot2::geom_ribbon(
-      ggplot2::aes_string(
-        ymin = paste0(name, '_lower'), ymax = paste0(name, '_upper')
-      ),
-      alpha = 0.2,
-      fill = "#0072B2",
-      na.rm = TRUE)
+      ggplot2::geom_ribbon(
+        ggplot2::aes_string(
+          ymin = paste0(name, '_lower'), ymax = paste0(name, '_upper')
+        ),
+        alpha = 0.2,
+        fill = "#0072B2",
+        na.rm = TRUE)
   }
   return(gg.s)
 }
@@ -1706,7 +1721,7 @@ prophet_copy <- function(m, cutoff = NULL) {
   if (is.null(m$history)) {
     stop("This is for copying a fitted Prophet object.")
   }
-
+  
   if (m$specified.changepoints) {
     changepoints <- m$changepoints
     if (!is.null(cutoff)) {

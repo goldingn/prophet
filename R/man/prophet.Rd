@@ -10,7 +10,7 @@ prophet(df = NULL, growth = "linear", changepoints = NULL,
   holidays = NULL, seasonality.prior.scale = 10,
   holidays.prior.scale = 10, changepoint.prior.scale = 0.05,
   mcmc.samples = 0, interval.width = 0.8, uncertainty.samples = 1000,
-  fit = TRUE, ...)
+  fit = TRUE, engine = c("stan", "greta"), ...)
 }
 \arguments{
 \item{df}{(optional) Dataframe containing the history. Must have columns ds
@@ -31,14 +31,14 @@ if input `changepoints` is supplied. If `changepoints` is not supplied,
 then n.changepoints potential changepoints are selected uniformly from the
 first 80 percent of df$ds.}
 
-\item{yearly.seasonality}{Fit yearly seasonality. Can be 'auto', TRUE,
-FALSE, or a number of Fourier terms to generate.}
+\item{yearly.seasonality}{Fit yearly seasonality. Can be 'auto', TRUE, FALSE,
+or a number of Fourier terms to generate.}
 
-\item{weekly.seasonality}{Fit weekly seasonality. Can be 'auto', TRUE,
-FALSE, or a number of Fourier terms to generate.}
+\item{weekly.seasonality}{Fit weekly seasonality. Can be 'auto', TRUE, FALSE,
+or a number of Fourier terms to generate.}
 
-\item{daily.seasonality}{Fit daily seasonality. Can be 'auto', TRUE,
-FALSE, or a number of Fourier terms to generate.}
+\item{daily.seasonality}{Fit daily seasonality. Can be 'auto', TRUE, FALSE,
+or a number of Fourier terms to generate.}
 
 \item{holidays}{data frame with columns holiday (character) and ds (date
 type)and optionally columns lower_window and upper_window which specify a
@@ -63,15 +63,18 @@ inference with the specified number of MCMC samples. If 0, will do MAP
 estimation.}
 
 \item{interval.width}{Numeric, width of the uncertainty intervals provided
-for the forecast. If mcmc.samples=0, this will be only the uncertainty
-in the trend using the MAP estimate of the extrapolated generative model.
-If mcmc.samples>0, this will be integrated over all model parameters,
-which will include uncertainty in seasonality.}
+for the forecast. If mcmc.samples=0, this will be only the uncertainty in
+the trend using the MAP estimate of the extrapolated generative model. If
+mcmc.samples>0, this will be integrated over all model parameters, which
+will include uncertainty in seasonality.}
 
 \item{uncertainty.samples}{Number of simulated draws used to estimate
 uncertainty intervals.}
 
 \item{fit}{Boolean, if FALSE the model is initialized but not fit.}
+
+\item{engine}{Which computational backend to use to fit the model. Can be
+either 'stan' or 'greta'.}
 
 \item{...}{Additional arguments, passed to \code{\link{fit.prophet}}}
 }
