@@ -957,17 +957,29 @@ fit.prophet <- function(m, df, ...) {
     m$params$sigma_obs <- 0.
     n.iteration <- 1.
   } else if (m$mcmc.samples > 0) {
-    stan.fit <- rstan::sampling(
-      model,
-      data = dat,
-      init = stan_init,
-      iter = m$mcmc.samples,
-      ...
-    )
-    m$params <- rstan::extract(stan.fit)
+    if (m$engine == 'stan') {
+      fit <- rstan::sampling(
+        model,
+        data = dat,
+        init = stan_init,
+        iter = m$mcmc.samples,
+        ...
+      )
+      m$params <- rstan::extract(fit)
+    } else {
+      fit <- greta_fit(
+        type = m$growth,
+        data = dat,
+        init = stan_init,
+        iter = m$mcmc.samples,
+        mcmc = TRUE,
+        ...
+      )
+      m$params <- fit$par
+    }
     n.iteration <- length(m$params$k)
   } else {
-
+    
     if (m$engine == 'stan') {
       fit <- rstan::optimizing(
         model,
@@ -983,6 +995,7 @@ fit.prophet <- function(m, df, ...) {
         data = dat,
         init = stan_init,
         iter = 1e4,
+        mcmc = FALSE,
         ...
       )
     }

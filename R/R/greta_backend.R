@@ -2,13 +2,7 @@
 
 #' @noRd
 #' @import greta
-greta_fit <- function (type = c("linear", "logistic"),
-                       data,
-                       init,
-                       iter,
-                       ...) {
-  
-  type <- match.arg(type)
+greta_fit <- function (type, data, init, iter, mcmc, ...) {
   
   if (type != "linear")
     stop ("not implemented")
@@ -53,35 +47,60 @@ greta_fit <- function (type = c("linear", "logistic"),
   order <- match(greta_names, tf_names)
   inits <- unlist_tf(inits[order])
   
-  # optimise with BFGS
-  fn <- function(par) {
-    mod$dag$send_parameters(par)
-    -mod$dag$log_density()
+  if (mcmc) {
+    draws <- mcmc(mod,
+                  warmup = iter,
+                  n_samples = iter,
+                  chains = 2,
+                  initial_values = inits)
+    
+    # convert to a single matrix
+    par <- as.matrix(draws)
+
+    # convert par into a named list
+    nm <- names(mod$target_greta_arrays)
+    values <- lapply(nm,
+                     function (name) {
+                       pattern <- paste0("^", name)
+                       idx <- grep(pattern, colnames(par))
+                       as.vector(par[, idx])
+                     })
+    names(values) <- nm
+    
+  } else {
+    
+    # optimise with BFGS
+    fn <- function(par) {
+      mod$dag$send_parameters(par)
+      -mod$dag$log_density()
+    }
+    
+    gr <- function(par) {
+      mod$dag$send_parameters(par)
+      -mod$dag$gradients()
+    }
+    
+    o <- optim(inits, fn, gr,
+               method = "BFGS",
+               control = list(maxit = iter))
+    
+    mod$dag$send_parameters(o$par)
+    par <- mod$dag$trace_values()
+    
+    # convert par into a named list
+    nm <- names(mod$target_greta_arrays)
+    values <- lapply(nm,
+                     function (name) {
+                       pattern <- paste0("^", name)
+                       idx <- grep(pattern, names(par))
+                       val <- as.vector(par[idx])
+                       names(val) <- NULL
+                       val
+                     })
+    names(values) <- nm
+    
   }
-  
-  gr <- function(par) {
-    mod$dag$send_parameters(par)
-    -mod$dag$gradients()
-  }
-  
-  o <- optim(inits, fn, gr,
-             method = "BFGS",
-             control = list(maxit = iter))
-  
-  mod$dag$send_parameters(o$par)
-  par <- mod$dag$trace_values()
-  
-  # convert par into a named list
-  nm <- names(mod$target_greta_arrays)
-  values <- lapply(nm,
-                   function (name) {
-                     pattern <- paste0("^", name)
-                     idx <- grep(pattern, names(par))
-                     val <- as.vector(par[idx])
-                     names(val) <- NULL
-                     val
-                   })
-  names(values) <- nm
+
   list(par = values)
   
 }
